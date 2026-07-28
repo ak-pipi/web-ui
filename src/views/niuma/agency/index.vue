@@ -450,9 +450,8 @@
               placeholder="全部"
               clearable
             >
-              <el-option label="金币" value="gold" />
+              <el-option label="积分" value="gold" />
               <el-option label="保险箱" value="deposit" />
-              <el-option label="钻石" value="diamond" />
             </el-select>
           </el-form-item>
           <el-form-item label="业务" prop="bizType">
@@ -470,7 +469,6 @@
               <el-option label="从保险箱取出" value="safe_withdraw" />
               <el-option label="转账转入" value="transfer_in" />
               <el-option label="转账转出" value="transfer_out" />
-              <el-option label="购买钻石" value="buy_diamond" />
               <el-option label="提现" value="withdraw" />
             </el-select>
           </el-form-item>
@@ -567,6 +565,12 @@
           </el-form-item>
           <el-form-item>
             <el-button
+              type="primary"
+              icon="el-icon-search"
+              size="mini"
+              @click="queryUnbindBinding"
+            >查询绑定</el-button>
+            <el-button
               v-hasPermi="['niuma:agency:unbind:execute']"
               type="danger"
               icon="el-icon-close"
@@ -575,6 +579,35 @@
             >解除绑定</el-button>
           </el-form-item>
         </el-form>
+
+        <el-table
+          v-loading="unbindBindingLoading"
+          :data="unbindBindingList"
+          class="section-table"
+          size="small"
+        >
+          <el-table-column label="玩家ID" align="center" prop="playerId" min-width="120" />
+          <el-table-column label="昵称" align="center" prop="nickname" min-width="120" />
+          <el-table-column label="当前代理" align="center" min-width="160">
+            <template slot-scope="scope">
+              <span>{{ scope.row.agentNickname || scope.row.agentPlayerId }}</span>
+              <span class="muted">({{ scope.row.agentPlayerId }})</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="一级代理" align="center" min-width="160">
+            <template slot-scope="scope">
+              <span>{{ scope.row.rootAgentNickname || scope.row.rootAgentPlayerId }}</span>
+              <span class="muted">({{ scope.row.rootAgentPlayerId }})</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="绑定来源" align="center" prop="bindSource" min-width="100" />
+          <el-table-column label="绑定时间" align="center" prop="bindAt" min-width="160" />
+          <el-table-column label="操作" align="center" width="100">
+            <template slot-scope="scope">
+              <el-button type="text" size="mini" @click="selectUnbindBinding(scope.row)">选择</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
 
         <el-table v-loading="unbindLoading" :data="unbindList">
           <el-table-column label="申请ID" align="center" prop="id" width="90" />
@@ -653,6 +686,80 @@
             <div class="metric-value">{{ playerStats.winRate || 0 }}%</div>
           </div>
         </div>
+      </el-tab-pane>
+
+      <el-tab-pane label="三天回放" name="replay">
+        <el-form
+          ref="replayQueryForm"
+          :model="replayQuery"
+          size="small"
+          :inline="true"
+          label-width="70px"
+        >
+          <el-form-item label="玩法" prop="gameType">
+            <el-select v-model="replayQuery.gameType" placeholder="请选择玩法">
+              <el-option
+                v-for="item in replayGameOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="玩家ID" prop="playerId">
+            <el-input
+              v-model="replayQuery.playerId"
+              placeholder="可选"
+              clearable
+              @keyup.enter.native="handleReplayQuery"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" icon="el-icon-search" size="mini" @click="handleReplayQuery">搜索</el-button>
+            <el-button icon="el-icon-refresh" size="mini" @click="resetReplayQuery">重置</el-button>
+          </el-form-item>
+        </el-form>
+
+        <el-table v-loading="replayLoading" :data="replayList">
+          <el-table-column label="记录ID" align="center" prop="id" width="90" />
+          <el-table-column label="玩法" align="center" prop="gameName" min-width="100" />
+          <el-table-column label="房号" align="center" prop="number" min-width="100" />
+          <el-table-column label="局号" align="center" prop="roundNo" width="80" />
+          <el-table-column label="玩家" align="center" min-width="220">
+            <template slot-scope="scope">
+              <span>{{ replayPlayersText(scope.row.players) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="分数" align="center" min-width="160">
+            <template slot-scope="scope">
+              <span>{{ replayArrayText(scope.row.scores) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="输赢积分" align="center" min-width="160">
+            <template slot-scope="scope">
+              <span>{{ replayArrayText(scope.row.winGolds) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="时间" align="center" prop="time" min-width="150" />
+          <el-table-column label="过期时间" align="center" prop="expireTime" min-width="160" />
+          <el-table-column label="操作" align="center" width="100" fixed="right">
+            <template slot-scope="scope">
+              <el-button
+                type="text"
+                size="mini"
+                :disabled="!scope.row.hasReplay"
+                @click="openReplayPlayback(scope.row)"
+              >查看</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <pagination
+          v-show="replayTotal > 0"
+          :total="replayTotal"
+          :page.sync="replayQuery.pageNum"
+          :limit.sync="replayQuery.pageSize"
+          @pagination="loadReplayList"
+        />
       </el-tab-pane>
     </el-tabs>
 
@@ -761,14 +868,19 @@
         </el-form-item>
         <el-form-item label="钱包" prop="walletType">
           <el-select v-model="adjustForm.walletType" placeholder="请选择钱包">
-            <el-option label="金币" value="gold" />
-            <el-option label="保险箱" value="deposit" />
+            <el-option label="积分" value="gold" />
           </el-select>
         </el-form-item>
-        <el-form-item label="调整金额" prop="amount">
+        <el-form-item label="操作类型" prop="action">
+          <el-radio-group v-model="adjustForm.action">
+            <el-radio-button label="increase">增加</el-radio-button>
+            <el-radio-button label="decrease">减少</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="数量" prop="amount">
           <el-input-number
             v-model="adjustForm.amount"
-            :min="-999999999"
+            :min="1"
             :max="999999999"
             :step="100"
             controls-position="right"
@@ -783,6 +895,34 @@
         <el-button type="primary" @click="submitAdjust">确定</el-button>
       </div>
     </el-dialog>
+
+    <el-dialog
+      title="对局回放"
+      :visible.sync="replayDialogVisible"
+      width="760px"
+      append-to-body
+    >
+      <el-descriptions v-if="replayPlayback" :column="2" border size="small">
+        <el-descriptions-item label="玩法">{{ replayPlayback.gameName }}</el-descriptions-item>
+        <el-descriptions-item label="房号">{{ replayPlayback.number }}</el-descriptions-item>
+        <el-descriptions-item label="局号">{{ replayPlayback.roundNo }}</el-descriptions-item>
+        <el-descriptions-item label="时间">{{ replayPlayback.time }}</el-descriptions-item>
+        <el-descriptions-item label="玩家" :span="2">{{ replayPlayersText(replayPlayback.players) }}</el-descriptions-item>
+        <el-descriptions-item label="分数" :span="2">{{ replayArrayText(replayPlayback.scores) }}</el-descriptions-item>
+        <el-descriptions-item label="输赢积分" :span="2">{{ replayArrayText(replayPlayback.winGolds) }}</el-descriptions-item>
+        <el-descriptions-item label="格式">{{ replayPlayback.format }}</el-descriptions-item>
+        <el-descriptions-item label="编码">{{ replayPlayback.codec }}</el-descriptions-item>
+      </el-descriptions>
+      <el-input
+        v-if="replayPlayback && replayPlayback.base64"
+        v-model="replayPlayback.base64"
+        type="textarea"
+        :rows="8"
+        readonly
+        class="replay-base64"
+      />
+      <span v-else class="muted">回放数据不存在或已过期</span>
+    </el-dialog>
   </div>
 </template>
 
@@ -795,10 +935,12 @@ import {
   getAgencyCommissionSummary,
   getAgencyOverview,
   getAgencyPlayerStats,
+  getAgencyReplayPlayback,
   getAgencyTree,
   listAgency,
   listAgencyBinding,
   listAgencyCommission,
+  listAgencyReplay,
   listAgencyUnbindRequest,
   listAgencyWalletLedger,
   requestAgencyUnbind,
@@ -866,6 +1008,9 @@ export default {
       unbindLoading: false,
       unbindList: [],
       unbindTotal: 0,
+      unbindBindingLoading: false,
+      unbindBindingList: [],
+      selectedUnbindBinding: null,
       unbindQuery: {
         pageNum: 1,
         pageSize: 10
@@ -878,6 +1023,23 @@ export default {
         playerId: null
       },
       playerStats: {},
+      replayLoading: false,
+      replayList: [],
+      replayTotal: 0,
+      replayDialogVisible: false,
+      replayPlayback: null,
+      replayGameOptions: [
+        { label: '桃江麻将', value: 1031 },
+        { label: '红中麻将', value: 1032 },
+        { label: '跑得快', value: 1033 },
+        { label: '长沙麻将', value: 1034 }
+      ],
+      replayQuery: {
+        gameType: 1031,
+        playerId: null,
+        pageNum: 1,
+        pageSize: 10
+      },
       createDialogVisible: false,
       createForm: {
         playerId: null,
@@ -896,7 +1058,8 @@ export default {
       adjustForm: {
         playerId: null,
         walletType: 'gold',
-        amount: 0,
+        action: 'increase',
+        amount: 100,
         reason: null
       },
       createRules: {
@@ -911,7 +1074,8 @@ export default {
       adjustRules: {
         playerId: [{ required: true, message: '玩家ID不能为空', trigger: 'blur' }],
         walletType: [{ required: true, message: '钱包不能为空', trigger: 'change' }],
-        amount: [{ required: true, message: '调整金额不能为空', trigger: 'blur' }],
+        action: [{ required: true, message: '操作类型不能为空', trigger: 'change' }],
+        amount: [{ required: true, message: '数量不能为空', trigger: 'blur' }],
         reason: [{ required: true, message: '原因不能为空', trigger: 'blur' }]
       },
       bindRules: {
@@ -943,6 +1107,8 @@ export default {
         this.loadWalletList()
       } else if (tab.name === 'unbind') {
         this.loadUnbindList()
+      } else if (tab.name === 'replay') {
+        this.loadReplayList()
       }
     },
     loadOverview() {
@@ -1131,7 +1297,8 @@ export default {
       this.adjustForm = {
         playerId: null,
         walletType: 'gold',
-        amount: 0,
+        action: 'increase',
+        amount: 100,
         reason: null
       }
       this.adjustDialogVisible = true
@@ -1144,11 +1311,16 @@ export default {
         if (!valid) {
           return
         }
-        if (this.adjustForm.amount === 0) {
-          this.$modal.msgError('调整金额不能为0')
+        if (!this.adjustForm.amount || this.adjustForm.amount <= 0) {
+          this.$modal.msgError('数量必须大于0')
           return
         }
-        adjustAgencyWallet(this.adjustForm).then(() => {
+        const payload = Object.assign({}, this.adjustForm, {
+          amount: this.adjustForm.action === 'decrease'
+            ? -Math.abs(this.adjustForm.amount)
+            : Math.abs(this.adjustForm.amount)
+        })
+        adjustAgencyWallet(payload).then(() => {
           this.adjustDialogVisible = false
           this.$modal.msgSuccess('积分调整成功')
           this.loadWalletList()
@@ -1161,6 +1333,10 @@ export default {
         if (!valid) {
           return
         }
+        if (!this.selectedUnbindBinding || this.selectedUnbindBinding.playerId !== this.unbindForm.playerId) {
+          this.$modal.msgError('请先查询并选择要解除的有效绑定关系')
+          return
+        }
         this.$confirm('确认解除玩家 ' + this.unbindForm.playerId + ' 的代理绑定？', '系统提示', {
           type: 'warning'
         }).then(() => {
@@ -1171,11 +1347,41 @@ export default {
             playerId: null,
             reason: null
           }
+          this.unbindBindingList = []
+          this.selectedUnbindBinding = null
           this.loadUnbindList()
           this.loadBindingList()
           this.afterConfigChanged()
         }).catch(() => {})
       })
+    },
+    queryUnbindBinding() {
+      if (!this.unbindForm.playerId) {
+        this.$modal.msgError('请输入玩家ID')
+        return
+      }
+      this.unbindBindingLoading = true
+      this.selectedUnbindBinding = null
+      listAgencyBinding({
+        playerId: this.unbindForm.playerId,
+        status: 'active',
+        pageNum: 1,
+        pageSize: 10
+      }).then(response => {
+        this.unbindBindingList = response.records || []
+        if (this.unbindBindingList.length === 1) {
+          this.selectUnbindBinding(this.unbindBindingList[0])
+        } else if (this.unbindBindingList.length === 0) {
+          this.$modal.msgWarning('未查询到有效绑定关系')
+        }
+      }).finally(() => {
+        this.unbindBindingLoading = false
+      })
+    },
+    selectUnbindBinding(row) {
+      this.selectedUnbindBinding = row
+      this.unbindForm.playerId = row.playerId
+      this.$modal.msgSuccess('已选择玩家 ' + row.playerId + ' 的绑定关系')
     },
     loadUnbindList() {
       this.unbindLoading = true
@@ -1205,6 +1411,34 @@ export default {
       }
       getAgencyPlayerStats(this.statsQuery.playerId).then(response => {
         this.playerStats = response || {}
+      })
+    },
+    loadReplayList() {
+      this.replayLoading = true
+      listAgencyReplay(this.replayQuery).then(response => {
+        this.replayList = response.records || []
+        this.replayTotal = response.total || 0
+      }).finally(() => {
+        this.replayLoading = false
+      })
+    },
+    handleReplayQuery() {
+      this.replayQuery.pageNum = 1
+      this.loadReplayList()
+    },
+    resetReplayQuery() {
+      this.resetForm('replayQueryForm')
+      this.replayQuery.gameType = 1031
+      this.handleReplayQuery()
+    },
+    openReplayPlayback(row) {
+      getAgencyReplayPlayback({
+        id: row.id,
+        gameType: row.gameType,
+        playerId: this.replayQuery.playerId
+      }).then(response => {
+        this.replayPlayback = response.data || null
+        this.replayDialogVisible = true
       })
     },
     afterConfigChanged() {
@@ -1257,13 +1491,10 @@ export default {
     },
     walletTypeText(value) {
       if (value === 'gold') {
-        return '金币'
+        return '积分'
       }
       if (value === 'deposit') {
         return '保险箱'
-      }
-      if (value === 'diamond') {
-        return '钻石'
       }
       return value || '-'
     },
@@ -1278,11 +1509,25 @@ export default {
         safe_withdraw: '从保险箱取出',
         transfer_in: '转账转入',
         transfer_out: '转账转出',
-        buy_diamond: '购买钻石',
         recharge: '充值',
         withdraw: '提现'
       }
       return map[value] || value || '-'
+    },
+    replayPlayersText(players) {
+      if (!players || !players.length) {
+        return '-'
+      }
+      return players
+        .filter(Boolean)
+        .map(item => (item.nickname || item.playerId || '-') + '(' + (item.playerId || '-') + ')')
+        .join(' / ')
+    },
+    replayArrayText(values) {
+      if (!values || !values.length) {
+        return '-'
+      }
+      return values.map(item => Number(item || 0).toLocaleString()).join(' / ')
     }
   }
 }
@@ -1328,6 +1573,14 @@ export default {
 
 .toolbar-row {
   margin-bottom: 12px;
+}
+
+.section-table {
+  margin-bottom: 14px;
+}
+
+.replay-base64 {
+  margin-top: 14px;
 }
 
 .tree-node {

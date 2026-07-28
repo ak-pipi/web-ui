@@ -141,6 +141,22 @@ export function executeAgencyUnbind(requestId) {
   })
 }
 
+export function listAgencyReplay(data) {
+  return request({
+    url: '/admin/agency/replay/page',
+    method: 'post',
+    data: data
+  })
+}
+
+export function getAgencyReplayPlayback(data) {
+  return request({
+    url: '/admin/agency/replay/playback',
+    method: 'post',
+    data: data
+  })
+}
+
 export function getAgencyPlayerStats(playerId) {
   return request({
     url: '/admin/agency/stats/player/' + parseStrEmpty(playerId),

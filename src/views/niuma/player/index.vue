@@ -51,19 +51,9 @@
           <span>{{ getSex(scope.row.sex) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="金币" align="right" prop="goldBalance" min-width="110">
+      <el-table-column label="当前积分" align="right" prop="goldBalance" min-width="110">
         <template slot-scope="scope">
           <span>{{ amountText(scope.row.goldBalance) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="保险箱" align="right" prop="depositBalance" min-width="110">
-        <template slot-scope="scope">
-          <span>{{ amountText(scope.row.depositBalance) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="钻石" align="right" prop="diamondBalance" min-width="90">
-        <template slot-scope="scope">
-          <span>{{ amountText(scope.row.diamondBalance) }}</span>
         </template>
       </el-table-column>
       <el-table-column label="上级代理" align="center" prop="agency" min-width="160" />
@@ -142,10 +132,16 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="调整数量" prop="amount">
+        <el-form-item label="操作类型" prop="action">
+          <el-radio-group v-model="adjustForm.action">
+            <el-radio-button label="increase">增加</el-radio-button>
+            <el-radio-button label="decrease">减少</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="数量" prop="amount">
           <el-input-number
             v-model="adjustForm.amount"
-            :min="-999999999"
+            :min="1"
             :max="999999999"
             :step="1"
             :precision="0"
@@ -333,15 +329,12 @@ export default {
         pageSize: 10
       },
       walletOptions: [
-        { label: '金币', value: 'gold' },
-        { label: '保险箱', value: 'deposit' },
-        { label: '钻石', value: 'diamond' },
+        { label: '积分', value: 'gold' },
         { label: '房卡', value: 'room_card' },
         { label: '积分', value: 'points' }
       ],
       adjustWalletOptions: [
-        { label: '金币', value: 'gold' },
-        { label: '保险箱', value: 'deposit' }
+        { label: '积分', value: 'gold' }
       ],
       bizOptions: [
         { label: '牌局结算', value: 'game_settle' },
@@ -349,11 +342,8 @@ export default {
         { label: '房间押金', value: 'room_deposit' },
         { label: '代理返佣', value: 'agency_commission' },
         { label: '后台调整', value: 'admin_adjust' },
-        { label: '存入保险箱', value: 'safe_deposit' },
-        { label: '从保险箱取出', value: 'safe_withdraw' },
         { label: '转账转入', value: 'transfer_in' },
         { label: '转账转出', value: 'transfer_out' },
-        { label: '购买钻石', value: 'buy_diamond' },
         { label: '充值', value: 'recharge' },
         { label: '提现', value: 'withdraw' }
       ],
@@ -362,12 +352,14 @@ export default {
       adjustForm: {
         playerId: null,
         walletType: 'gold',
-        amount: 0,
+        action: 'increase',
+        amount: 1,
         reason: ''
       },
       adjustRules: {
         walletType: [{ required: true, message: '钱包不能为空', trigger: 'change' }],
-        amount: [{ required: true, message: '调整数量不能为空', trigger: 'blur' }],
+        action: [{ required: true, message: '操作类型不能为空', trigger: 'change' }],
+        amount: [{ required: true, message: '数量不能为空', trigger: 'blur' }],
         reason: [{ required: true, message: '调整原因不能为空', trigger: 'blur' }]
       },
       ledgerOpen: false,
@@ -437,7 +429,8 @@ export default {
       this.adjustForm = {
         playerId: row.playerId,
         walletType: 'gold',
-        amount: 0,
+        action: 'increase',
+        amount: 1,
         reason: ''
       }
       this.adjustOpen = true
@@ -450,12 +443,17 @@ export default {
         if (!valid) {
           return
         }
-        if (!this.adjustForm.amount) {
-          this.$modal.msgError('调整数量不能为0')
+        if (!this.adjustForm.amount || this.adjustForm.amount <= 0) {
+          this.$modal.msgError('数量必须大于0')
           return
         }
+        const payload = Object.assign({}, this.adjustForm, {
+          amount: this.adjustForm.action === 'decrease'
+            ? -Math.abs(this.adjustForm.amount)
+            : Math.abs(this.adjustForm.amount)
+        })
         this.adjustLoading = true
-        adjustWallet(this.adjustForm).then(() => {
+        adjustWallet(payload).then(() => {
           this.$modal.msgSuccess('积分调整成功')
           this.adjustOpen = false
           this.getList()

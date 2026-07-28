@@ -13,7 +13,7 @@ export function listPlayer(data) {
 // 禁用或启用玩家
 export function banPlayer(playerId) {
   return request({
-    url: '/admin/player/ban/' + parseStrEmpty(userId),
+    url: '/admin/player/ban/' + parseStrEmpty(playerId),
     method: 'post'
   });
 }

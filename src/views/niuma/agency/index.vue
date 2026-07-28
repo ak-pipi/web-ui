@@ -465,6 +465,13 @@
               <el-option label="后台调整" value="admin_adjust" />
               <el-option label="游戏结算" value="game_settle" />
               <el-option label="房费" value="room_fee" />
+              <el-option label="房间押金" value="room_deposit" />
+              <el-option label="存入保险箱" value="safe_deposit" />
+              <el-option label="从保险箱取出" value="safe_withdraw" />
+              <el-option label="转账转入" value="transfer_in" />
+              <el-option label="转账转出" value="transfer_out" />
+              <el-option label="购买钻石" value="buy_diamond" />
+              <el-option label="提现" value="withdraw" />
             </el-select>
           </el-form-item>
           <el-form-item label="时间">
@@ -517,7 +524,11 @@
               <span>{{ amountText(scope.row.balanceAfter) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="业务类型" align="center" prop="bizType" min-width="130" />
+          <el-table-column label="业务类型" align="center" min-width="130">
+            <template slot-scope="scope">
+              <span>{{ bizTypeText(scope.row.bizType) }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="业务ID" align="center" prop="bizId" min-width="160" />
           <el-table-column label="备注" align="center" prop="remark" min-width="180" />
           <el-table-column label="时间" align="center" prop="createTime" min-width="160" />
@@ -752,7 +763,6 @@
           <el-select v-model="adjustForm.walletType" placeholder="请选择钱包">
             <el-option label="金币" value="gold" />
             <el-option label="保险箱" value="deposit" />
-            <el-option label="钻石" value="diamond" />
           </el-select>
         </el-form-item>
         <el-form-item label="调整金额" prop="amount">
@@ -1256,6 +1266,23 @@ export default {
         return '钻石'
       }
       return value || '-'
+    },
+    bizTypeText(value) {
+      const map = {
+        game_settle: '游戏结算',
+        room_fee: '房费',
+        room_deposit: '房间押金',
+        agency_commission: '代理返佣',
+        admin_adjust: '后台调整',
+        safe_deposit: '存入保险箱',
+        safe_withdraw: '从保险箱取出',
+        transfer_in: '转账转入',
+        transfer_out: '转账转出',
+        buy_diamond: '购买钻石',
+        recharge: '充值',
+        withdraw: '提现'
+      }
+      return map[value] || value || '-'
     }
   }
 }

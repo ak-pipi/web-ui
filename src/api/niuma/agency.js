@@ -102,6 +102,15 @@ export function listAgencyWalletLedger(data) {
   })
 }
 
+export function getAgencyWalletBalance(data) {
+  return request({
+    url: '/admin/agency/wallet/balance',
+    method: 'post',
+    headers: { repeatSubmit: false },
+    data: data
+  })
+}
+
 export function adjustAgencyWallet(data) {
   return request({
     url: '/admin/agency/wallet/adjust',

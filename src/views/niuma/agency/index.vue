@@ -864,7 +864,23 @@
         label-width="100px"
       >
         <el-form-item label="玩家ID" prop="playerId">
-          <el-input v-model="adjustForm.playerId" placeholder="请输入玩家ID" />
+          <el-input
+            v-model="adjustForm.playerId"
+            placeholder="请输入玩家ID"
+            clearable
+            @blur="loadAdjustBalance"
+          >
+            <el-button
+              slot="append"
+              icon="el-icon-refresh"
+              :loading="adjustBalanceLoading"
+              @click="loadAdjustBalance"
+            />
+          </el-input>
+        </el-form-item>
+        <el-form-item label="当前积分">
+          <span v-if="adjustBalanceLoaded" class="amount-strong">{{ amountText(adjustForm.currentGold) }}</span>
+          <span v-else class="muted">输入玩家ID后查询</span>
         </el-form-item>
         <el-form-item label="钱包" prop="walletType">
           <el-select v-model="adjustForm.walletType" placeholder="请选择钱包">
@@ -937,6 +953,7 @@ import {
   getAgencyPlayerStats,
   getAgencyReplayPlayback,
   getAgencyTree,
+  getAgencyWalletBalance,
   listAgency,
   listAgencyBinding,
   listAgencyCommission,
@@ -1055,8 +1072,11 @@ export default {
         reason: null
       },
       adjustDialogVisible: false,
+      adjustBalanceLoading: false,
+      adjustBalanceLoaded: false,
       adjustForm: {
         playerId: null,
+        currentGold: 0,
         walletType: 'gold',
         action: 'increase',
         amount: 100,
@@ -1296,14 +1316,36 @@ export default {
     openAdjustDialog() {
       this.adjustForm = {
         playerId: null,
+        currentGold: 0,
         walletType: 'gold',
         action: 'increase',
         amount: 100,
         reason: null
       }
+      this.adjustBalanceLoaded = false
       this.adjustDialogVisible = true
       this.$nextTick(() => {
         this.resetForm('adjustForm')
+      })
+    },
+    loadAdjustBalance() {
+      if (this.adjustBalanceLoading) {
+        return
+      }
+      if (!this.adjustForm.playerId) {
+        this.adjustForm.currentGold = 0
+        this.adjustBalanceLoaded = false
+        return
+      }
+      this.adjustBalanceLoading = true
+      getAgencyWalletBalance({ playerId: this.adjustForm.playerId }).then(response => {
+        this.adjustForm.currentGold = response && response.gold != null ? response.gold : 0
+        this.adjustBalanceLoaded = true
+      }).finally(() => {
+        this.adjustBalanceLoading = false
+      }).catch(() => {
+        this.adjustForm.currentGold = 0
+        this.adjustBalanceLoaded = false
       })
     },
     submitAdjust() {
@@ -1325,7 +1367,7 @@ export default {
           this.$modal.msgSuccess('积分调整成功')
           this.loadWalletList()
           this.loadOverview()
-        })
+        }).catch(() => {})
       })
     },
     submitUnbind() {
@@ -1598,5 +1640,11 @@ export default {
 .inline-tip {
   margin-left: 10px;
   color: #606266;
+}
+
+.amount-strong {
+  margin-right: 10px;
+  color: #303133;
+  font-weight: 600;
 }
 </style>

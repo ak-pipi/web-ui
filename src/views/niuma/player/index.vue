@@ -122,6 +122,15 @@
         <el-form-item label="玩家ID">
           <el-input v-model="adjustForm.playerId" disabled />
         </el-form-item>
+        <el-form-item label="当前积分">
+          <span class="amount-strong">{{ amountText(adjustForm.currentGold) }}</span>
+          <el-button
+            type="text"
+            size="mini"
+            :loading="adjustBalanceLoading"
+            @click="loadAdjustBalance"
+          >刷新</el-button>
+        </el-form-item>
         <el-form-item label="钱包" prop="walletType">
           <el-select v-model="adjustForm.walletType" placeholder="请选择钱包" style="width: 100%">
             <el-option
@@ -311,7 +320,7 @@
 
 <script>
 import { listPlayer, banPlayer } from '@/api/niuma/player'
-import { adjustWallet, listRoomFeeLedger, listWalletLedger } from '@/api/niuma/wallet'
+import { adjustWallet, getWalletBalances, listRoomFeeLedger, listWalletLedger } from '@/api/niuma/wallet'
 
 export default {
   name: 'Player',
@@ -349,8 +358,10 @@ export default {
       ],
       adjustOpen: false,
       adjustLoading: false,
+      adjustBalanceLoading: false,
       adjustForm: {
         playerId: null,
+        currentGold: 0,
         walletType: 'gold',
         action: 'increase',
         amount: 1,
@@ -428,6 +439,7 @@ export default {
     handleAdjust(row) {
       this.adjustForm = {
         playerId: row.playerId,
+        currentGold: row.goldBalance || 0,
         walletType: 'gold',
         action: 'increase',
         amount: 1,
@@ -436,7 +448,23 @@ export default {
       this.adjustOpen = true
       this.$nextTick(() => {
         this.resetForm('adjustForm')
+        this.loadAdjustBalance()
       })
+    },
+    loadAdjustBalance() {
+      if (this.adjustBalanceLoading) {
+        return
+      }
+      if (!this.adjustForm.playerId) {
+        this.adjustForm.currentGold = 0
+        return
+      }
+      this.adjustBalanceLoading = true
+      getWalletBalances({ playerId: this.adjustForm.playerId }).then(response => {
+        this.adjustForm.currentGold = response && response.gold != null ? response.gold : 0
+      }).finally(() => {
+        this.adjustBalanceLoading = false
+      }).catch(() => {})
     },
     submitAdjust() {
       this.$refs.adjustForm.validate(valid => {
@@ -462,7 +490,7 @@ export default {
           }
         }).finally(() => {
           this.adjustLoading = false
-        })
+        }).catch(() => {})
       })
     },
     handleLedger(row) {
@@ -591,5 +619,11 @@ export default {
 
 .amount-negative {
   color: #f56c6c;
+}
+
+.amount-strong {
+  margin-right: 10px;
+  color: #303133;
+  font-weight: 600;
 }
 </style>

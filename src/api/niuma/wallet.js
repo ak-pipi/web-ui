@@ -4,6 +4,7 @@ export function getWalletBalances(data) {
   return request({
     url: '/admin/wallet/balance',
     method: 'post',
+    headers: { repeatSubmit: false },
     data: data
   })
 }

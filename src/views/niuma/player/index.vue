@@ -74,8 +74,14 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" align="center" class-name="small-padding fixed-width" width="270" fixed="right">
+      <el-table-column label="操作" align="center" class-name="small-padding fixed-width" width="320" fixed="right">
         <template slot-scope="scope">
+          <el-button
+            size="mini"
+            type="text"
+            @click="handleDetail(scope.row)"
+            v-hasPermi="['niuma:player']"
+          >详情</el-button>
           <el-button
             size="mini"
             type="text"
@@ -111,6 +117,130 @@
       :limit.sync="queryParams.pageSize"
       @pagination="getList"
     />
+
+    <el-dialog
+      :title="'玩家详情 - ' + detailQuery.playerId"
+      :visible.sync="detailOpen"
+      width="1060px"
+      append-to-body
+    >
+      <div v-loading="detailLoading">
+        <el-descriptions v-if="playerDetail" :column="3" border size="small">
+          <el-descriptions-item label="玩家ID">{{ playerDetail.playerId }}</el-descriptions-item>
+          <el-descriptions-item label="账号">{{ playerDetail.account || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="昵称">{{ playerDetail.nickname || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ playerStatusText(playerDetail.status) }}</el-descriptions-item>
+          <el-descriptions-item label="当前积分">{{ amountText(playerDetail.goldBalance) }}</el-descriptions-item>
+          <el-descriptions-item label="保险箱">{{ amountText(playerDetail.depositBalance) }}</el-descriptions-item>
+          <el-descriptions-item label="总局数">{{ amountText(playerDetail.totalRounds) }}</el-descriptions-item>
+          <el-descriptions-item label="胜率">{{ percentText(playerDetail.winRate) }}</el-descriptions-item>
+          <el-descriptions-item label="净输赢">{{ signedAmountText(playerDetail.totalScoreDelta) }}</el-descriptions-item>
+        </el-descriptions>
+
+        <el-divider content-position="left">玩法汇总</el-divider>
+        <el-table :data="gameSummaryList" size="small">
+          <el-table-column label="玩法" align="center" prop="gameName" min-width="110" />
+          <el-table-column label="总局数" align="right" prop="totalRounds" min-width="90" />
+          <el-table-column label="胜局" align="right" prop="winCount" min-width="80" />
+          <el-table-column label="负局" align="right" prop="loseCount" min-width="80" />
+          <el-table-column label="今日局数" align="right" prop="todayRounds" min-width="90" />
+          <el-table-column label="胜率" align="right" min-width="90">
+            <template slot-scope="scope">
+              <span>{{ percentText(scope.row.winRate) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="净输赢" align="right" min-width="100">
+            <template slot-scope="scope">
+              <span :class="amountClass(scope.row.totalScoreDelta)">{{ signedAmountText(scope.row.totalScoreDelta) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="最近对局" align="center" prop="latestTime" min-width="160" />
+        </el-table>
+
+        <el-divider content-position="left">三天回放</el-divider>
+        <el-form :model="detailReplayQuery" size="small" :inline="true" label-width="68px">
+          <el-form-item label="玩法">
+            <el-select v-model="detailReplayQuery.gameType" placeholder="请选择玩法" style="width: 150px">
+              <el-option
+                v-for="item in replayGameOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" icon="el-icon-search" size="mini" @click="queryDetailReplay">搜索</el-button>
+          </el-form-item>
+        </el-form>
+        <el-table v-loading="detailReplayLoading" :data="detailReplayList" size="small">
+          <el-table-column label="记录ID" align="center" prop="id" width="90" />
+          <el-table-column label="玩法" align="center" prop="gameName" min-width="100" />
+          <el-table-column label="房号" align="center" prop="number" min-width="100" />
+          <el-table-column label="局号" align="center" prop="roundNo" width="80" />
+          <el-table-column label="玩家" align="center" min-width="220">
+            <template slot-scope="scope">
+              <span>{{ replayPlayersText(scope.row.players) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="输赢积分" align="center" min-width="150">
+            <template slot-scope="scope">
+              <span>{{ replayArrayText(scope.row.winGolds) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="时间" align="center" prop="time" min-width="150" />
+          <el-table-column label="追溯窗口" align="center" min-width="250">
+            <template slot-scope="scope">
+              <span>{{ replayTraceText(scope.row) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" align="center" width="90">
+            <template slot-scope="scope">
+              <el-button
+                type="text"
+                size="mini"
+                :disabled="!scope.row.hasReplay"
+                @click="openPlayerReplayPlayback(scope.row)"
+              >查看</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <pagination
+          v-show="detailReplayTotal > 0"
+          :total="detailReplayTotal"
+          :page.sync="detailReplayQuery.pageNum"
+          :limit.sync="detailReplayQuery.pageSize"
+          @pagination="loadDetailReplayList"
+        />
+      </div>
+    </el-dialog>
+
+    <el-dialog
+      title="对局回放"
+      :visible.sync="replayPlaybackOpen"
+      width="760px"
+      append-to-body
+    >
+      <el-descriptions v-if="replayPlayback" :column="2" border size="small">
+        <el-descriptions-item label="玩法">{{ replayPlayback.gameName }}</el-descriptions-item>
+        <el-descriptions-item label="房号">{{ replayPlayback.number }}</el-descriptions-item>
+        <el-descriptions-item label="局号">{{ replayPlayback.roundNo }}</el-descriptions-item>
+        <el-descriptions-item label="时间">{{ replayPlayback.time }}</el-descriptions-item>
+        <el-descriptions-item label="追溯窗口" :span="2">{{ replayTraceText(replayPlayback) }}</el-descriptions-item>
+        <el-descriptions-item label="玩家" :span="2">{{ replayPlayersText(replayPlayback.players) }}</el-descriptions-item>
+        <el-descriptions-item label="分数" :span="2">{{ replayArrayText(replayPlayback.scores) }}</el-descriptions-item>
+        <el-descriptions-item label="输赢积分" :span="2">{{ replayArrayText(replayPlayback.winGolds) }}</el-descriptions-item>
+      </el-descriptions>
+      <el-input
+        v-if="replayPlayback && replayPlayback.base64"
+        v-model="replayPlayback.base64"
+        type="textarea"
+        :rows="8"
+        readonly
+        class="replay-base64"
+      />
+      <span v-else class="muted">回放数据不存在或已过期</span>
+    </el-dialog>
 
     <el-dialog
       :title="'积分调整 - ' + adjustForm.playerId"
@@ -319,7 +449,7 @@
 </template>
 
 <script>
-import { listPlayer, banPlayer } from '@/api/niuma/player'
+import { listPlayer, banPlayer, getPlayerDetail, listPlayerReplay, getPlayerReplayPlayback } from '@/api/niuma/player'
 import { adjustWallet, getWalletBalances, listRoomFeeLedger, listWalletLedger } from '@/api/niuma/wallet'
 
 export default {
@@ -394,7 +524,31 @@ export default {
         playerId: null,
         pageNum: 1,
         pageSize: 10
-      }
+      },
+      detailOpen: false,
+      detailLoading: false,
+      playerDetail: null,
+      gameSummaryList: [],
+      detailQuery: {
+        playerId: null
+      },
+      replayGameOptions: [
+        { label: '桃江麻将', value: 1031 },
+        { label: '红中麻将', value: 1032 },
+        { label: '跑得快', value: 1033 },
+        { label: '长沙麻将', value: 1034 }
+      ],
+      detailReplayLoading: false,
+      detailReplayList: [],
+      detailReplayTotal: 0,
+      detailReplayQuery: {
+        playerId: null,
+        gameType: 1031,
+        pageNum: 1,
+        pageSize: 5
+      },
+      replayPlaybackOpen: false,
+      replayPlayback: null
     }
   },
   created() {
@@ -434,6 +588,55 @@ export default {
       }).then(() => {
         this.$modal.msgSuccess(text + '成功')
         this.getList()
+      })
+    },
+    handleDetail(row) {
+      this.detailQuery.playerId = row.playerId
+      this.detailReplayQuery = {
+        playerId: row.playerId,
+        gameType: 1031,
+        pageNum: 1,
+        pageSize: 5
+      }
+      this.detailOpen = true
+      this.loadPlayerDetail()
+      this.loadDetailReplayList()
+    },
+    loadPlayerDetail() {
+      if (!this.detailQuery.playerId) {
+        return
+      }
+      this.detailLoading = true
+      getPlayerDetail(this.detailQuery.playerId).then(response => {
+        this.playerDetail = response.detail || null
+        this.gameSummaryList = (this.playerDetail && this.playerDetail.gameSummaries) || []
+      }).finally(() => {
+        this.detailLoading = false
+      })
+    },
+    queryDetailReplay() {
+      this.detailReplayQuery.pageNum = 1
+      this.loadDetailReplayList()
+    },
+    loadDetailReplayList() {
+      if (!this.detailReplayQuery.playerId) {
+        return
+      }
+      this.detailReplayLoading = true
+      listPlayerReplay(this.detailReplayQuery.playerId, this.detailReplayQuery).then(response => {
+        this.detailReplayList = response.records || []
+        this.detailReplayTotal = response.total || 0
+      }).finally(() => {
+        this.detailReplayLoading = false
+      })
+    },
+    openPlayerReplayPlayback(row) {
+      getPlayerReplayPlayback(this.detailReplayQuery.playerId, {
+        id: row.id,
+        gameType: row.gameType
+      }).then(response => {
+        this.replayPlayback = response.data || null
+        this.replayPlaybackOpen = true
       })
     },
     handleAdjust(row) {
@@ -588,6 +791,44 @@ export default {
       }
       return ''
     },
+    percentText(value) {
+      const num = Number(value || 0)
+      return num.toFixed(1) + '%'
+    },
+    playerStatusText(value) {
+      const map = {
+        online: '在线',
+        offline: '离线',
+        banned: '已禁用',
+        frozen: '已冻结',
+        normal: '正常'
+      }
+      return map[value] || value || '-'
+    },
+    replayPlayersText(players) {
+      if (!players || !players.length) {
+        return '-'
+      }
+      return players
+        .filter(Boolean)
+        .map(item => (item.nickname || item.playerId || '-') + '(' + (item.playerId || '-') + ')')
+        .join(' / ')
+    },
+    replayArrayText(values) {
+      if (!values || !values.length) {
+        return '-'
+      }
+      return values.map(item => Number(item || 0).toLocaleString()).join(' / ')
+    },
+    replayTraceText(row) {
+      if (!row) {
+        return '-'
+      }
+      if (row.traceStartTime) {
+        return row.traceStartTime + ' 至 ' + (row.traceEndTime || '当前')
+      }
+      return row.expireTime ? '过期 ' + row.expireTime : '-'
+    },
     walletTypeText(value) {
       const item = this.walletOptions.find(option => option.value === value)
       return item ? item.label : (value || '-')
@@ -625,5 +866,13 @@ export default {
   margin-right: 10px;
   color: #303133;
   font-weight: 600;
+}
+
+.muted {
+  color: #909399;
+}
+
+.replay-base64 {
+  margin-top: 12px;
 }
 </style>

@@ -47,29 +47,6 @@ export function updateAgencyStatus(agentPlayerId, data) {
   })
 }
 
-export function resetAgencyInviteCode(agentPlayerId) {
-  return request({
-    url: '/admin/agency/' + parseStrEmpty(agentPlayerId) + '/invite-code',
-    method: 'post'
-  })
-}
-
-export function listAgencyInviteCode(data) {
-  return request({
-    url: '/admin/agency/invite/page',
-    method: 'post',
-    data: data
-  })
-}
-
-export function bindPlayerByInviteCode(data) {
-  return request({
-    url: '/admin/agency/bind/by-code',
-    method: 'post',
-    data: data
-  })
-}
-
 export function listAgencyBinding(data) {
   return request({
     url: '/admin/agency/bindings/page',
@@ -97,6 +74,14 @@ export function getAgencyCommissionSummary(data) {
 export function listAgencyWalletLedger(data) {
   return request({
     url: '/admin/agency/wallet/ledger/page',
+    method: 'post',
+    data: data
+  })
+}
+
+export function listAgencyStat(data) {
+  return request({
+    url: '/admin/agency/stat/page',
     method: 'post',
     data: data
   })

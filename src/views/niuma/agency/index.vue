@@ -64,6 +64,10 @@
               v-if="data.nodeType === 'agent'"
               class="muted"
             >返佣: {{ rateText(data.commissionRateBp) }}</span>
+            <span
+              v-if="data.nodeType === 'agent'"
+              class="muted"
+            >邀请码: {{ data.inviteCode || '-' }}</span>
           </span>
         </el-tree>
       </el-tab-pane>
@@ -102,14 +106,14 @@
               <el-option label="二级代理" :value="2" />
             </el-select>
           </el-form-item>
-          <el-form-item label="状态" prop="status">
+          <el-form-item label="工作台" prop="status">
             <el-select
               v-model="agencyQuery.status"
               placeholder="全部"
               clearable
             >
-              <el-option label="正常" :value="0" />
-              <el-option label="停用" :value="1" />
+              <el-option label="可登录" :value="0" />
+              <el-option label="已撤销" :value="1" />
             </el-select>
           </el-form-item>
           <el-form-item>
@@ -147,12 +151,16 @@
           </el-table-column>
           <el-table-column label="上级ID" align="center" prop="superiorId" min-width="120" />
           <el-table-column label="上级昵称" align="center" prop="superiorNickname" min-width="120" />
+          <el-table-column label="邀请码" align="center" prop="inviteCode" min-width="130">
+            <template slot-scope="scope">
+              <span>{{ scope.row.inviteCode || '-' }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="返佣比例" align="center" width="110">
             <template slot-scope="scope">
               <span>{{ rateText(scope.row.commissionRateBp) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="邀请码" align="center" prop="inviteCode" min-width="120" />
           <el-table-column label="直推玩家" align="center" prop="directPlayerCount" width="90" />
           <el-table-column label="下级代理" align="center" prop="directAgentCount" width="90" />
           <el-table-column label="累计返佣" align="center" width="110">
@@ -160,15 +168,15 @@
               <span>{{ amountText(scope.row.totalCommission) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="状态" align="center" width="90">
+          <el-table-column label="工作台" align="center" width="90">
             <template slot-scope="scope">
               <el-tag
                 size="mini"
-                :type="scope.row.status === 0 ? 'success' : 'danger'"
-              >{{ statusText(scope.row.status) }}</el-tag>
+                :type="scope.row.workbenchStatus === 0 ? 'success' : 'danger'"
+              >{{ workbenchStatusText(scope.row.workbenchStatus) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" align="center" width="260" fixed="right">
+          <el-table-column label="操作" align="center" width="190" fixed="right">
             <template slot-scope="scope">
               <el-button
                 v-hasPermi="['niuma:agency:rate:update']"
@@ -178,19 +186,13 @@
                 @click="openRateDialog(scope.row)"
               >比例</el-button>
               <el-button
-                v-hasPermi="['niuma:agency:invite:update']"
-                type="text"
-                size="mini"
-                icon="el-icon-refresh"
-                @click="handleResetInvite(scope.row)"
-              >邀请码</el-button>
-              <el-button
+                v-if="overview.admin"
                 v-hasPermi="['niuma:agency:status:update']"
                 type="text"
                 size="mini"
-                :icon="scope.row.status === 0 ? 'el-icon-lock' : 'el-icon-unlock'"
+                :icon="scope.row.workbenchStatus === 0 ? 'el-icon-lock' : 'el-icon-unlock'"
                 @click="handleStatus(scope.row)"
-              >{{ scope.row.status === 0 ? '停用' : '启用' }}</el-button>
+              >{{ scope.row.workbenchStatus === 0 ? '撤销工作台' : '恢复工作台' }}</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -204,39 +206,6 @@
       </el-tab-pane>
 
       <el-tab-pane label="玩家绑定" name="bindings">
-        <el-form
-          ref="bindForm"
-          :model="bindForm"
-          :rules="bindRules"
-          size="small"
-          :inline="true"
-          label-width="70px"
-        >
-          <el-form-item label="玩家ID" prop="playerId">
-            <el-input
-              v-model="bindForm.playerId"
-              placeholder="请输入玩家ID"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="邀请码" prop="inviteCode">
-            <el-input
-              v-model="bindForm.inviteCode"
-              placeholder="请输入邀请码"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item>
-            <el-button
-              v-hasPermi="['niuma:agency:binding:update']"
-              type="primary"
-              icon="el-icon-link"
-              size="mini"
-              @click="submitBind"
-            >绑定</el-button>
-          </el-form-item>
-        </el-form>
-
         <el-form
           ref="bindingQueryForm"
           :model="bindingQuery"
@@ -292,7 +261,6 @@
           <el-table-column label="直接代理" align="center" prop="agentNickname" min-width="120" />
           <el-table-column label="一级代理ID" align="center" prop="rootAgentPlayerId" min-width="120" />
           <el-table-column label="来源" align="center" prop="bindSource" width="100" />
-          <el-table-column label="邀请码" align="center" prop="inviteCode" width="110" />
           <el-table-column label="状态" align="center" width="100">
             <template slot-scope="scope">
               <el-tag
@@ -640,52 +608,90 @@
         />
       </el-tab-pane>
 
-      <el-tab-pane label="玩家统计" name="stats">
+      <el-tab-pane label="统计" name="stats">
         <el-form
-          :model="statsQuery"
+          :model="agencyStatQuery"
           size="small"
           :inline="true"
           label-width="70px"
         >
-          <el-form-item label="玩家ID">
+          <el-form-item label="关键字">
             <el-input
-              v-model="statsQuery.playerId"
-              placeholder="请输入玩家ID"
+              v-model="agencyStatQuery.keyword"
+              placeholder="玩家ID/名称"
               clearable
-              @keyup.enter.native="loadPlayerStats"
+              @keyup.enter.native="handleAgencyStatQuery"
             />
           </el-form-item>
           <el-form-item>
+            <el-button type="primary" icon="el-icon-search" size="mini" @click="handleAgencyStatQuery">查询</el-button>
+            <el-button icon="el-icon-refresh" size="mini" @click="resetAgencyStatQuery">重置</el-button>
             <el-button
-              type="primary"
-              icon="el-icon-search"
+              v-if="agencyStatParentId"
+              icon="el-icon-back"
               size="mini"
-              @click="loadPlayerStats"
-            >查询</el-button>
+              @click="resetAgencyStatParent"
+            >返回上级</el-button>
+          </el-form-item>
+          <el-form-item label="范围">
+            <span class="inline-tip">{{ agencyStatParentText() }}</span>
           </el-form-item>
         </el-form>
-        <div class="metric-grid compact">
-          <div class="metric-item">
-            <div class="metric-label">总局数</div>
-            <div class="metric-value">{{ playerStats.totalRounds || 0 }}</div>
-          </div>
-          <div class="metric-item">
-            <div class="metric-label">胜局</div>
-            <div class="metric-value">{{ playerStats.winCount || 0 }}</div>
-          </div>
-          <div class="metric-item">
-            <div class="metric-label">负局</div>
-            <div class="metric-value">{{ playerStats.loseCount || 0 }}</div>
-          </div>
-          <div class="metric-item">
-            <div class="metric-label">平局</div>
-            <div class="metric-value">{{ playerStats.drawCount || 0 }}</div>
-          </div>
-          <div class="metric-item">
-            <div class="metric-label">胜率</div>
-            <div class="metric-value">{{ playerStats.winRate || 0 }}%</div>
-          </div>
-        </div>
+
+        <el-tabs v-model="agencyStatTab" @tab-click="handleAgencyStatTabClick">
+          <el-tab-pane label="群统计" name="group" />
+          <el-tab-pane label="成员统计" name="member" />
+        </el-tabs>
+
+        <el-table v-loading="agencyStatLoading" :data="agencyStatList">
+          <el-table-column label="身份" align="center" prop="identity" width="110" />
+          <el-table-column label="信息" min-width="220">
+            <template slot-scope="scope">
+              <div class="player-info-cell">
+                <img v-if="scope.row.avatar" :src="scope.row.avatar" class="player-avatar">
+                <span v-else class="player-avatar avatar-fallback">{{ avatarInitial(scope.row) }}</span>
+                <span>
+                  <span class="player-name">{{ scope.row.nickname || scope.row.account || '-' }}</span>
+                  <span class="muted">ID: {{ scope.row.playerId || '-' }}</span>
+                </span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="积分" align="center" width="130">
+            <template slot-scope="scope">
+              <span>{{ amountText(scope.row.score) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="总消耗" align="center" width="130">
+            <template slot-scope="scope">
+              <span>{{ amountText(scope.row.totalConsume) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="获得赠送" align="center" width="130">
+            <template slot-scope="scope">
+              <span>{{ amountText(scope.row.giftReceived) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" align="center" width="130">
+            <template slot-scope="scope">
+              <el-button
+                v-if="agencyStatTab === 'group'"
+                type="text"
+                size="mini"
+                icon="el-icon-view"
+                @click="viewAgencyStatChildren(scope.row)"
+              >查看下级</el-button>
+              <span v-else class="muted">-</span>
+            </template>
+          </el-table-column>
+        </el-table>
+        <pagination
+          v-show="agencyStatTotal > 0"
+          :total="agencyStatTotal"
+          :page.sync="agencyStatQuery.pageNum"
+          :limit.sync="agencyStatQuery.pageSize"
+          @pagination="loadAgencyStats"
+        />
       </el-tab-pane>
 
       <el-tab-pane label="三天回放" name="replay">
@@ -741,7 +747,11 @@
             </template>
           </el-table-column>
           <el-table-column label="时间" align="center" prop="time" min-width="150" />
-          <el-table-column label="过期时间" align="center" prop="expireTime" min-width="160" />
+          <el-table-column label="追溯窗口" align="center" min-width="260">
+            <template slot-scope="scope">
+              <span>{{ replayTraceText(scope.row) }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="操作" align="center" width="100" fixed="right">
             <template slot-scope="scope">
               <el-button
@@ -776,7 +786,7 @@
         label-width="120px"
       >
         <el-form-item label="玩家ID" prop="playerId">
-          <el-input v-model="createForm.playerId" placeholder="请输入玩家ID" />
+          <el-input v-model="createForm.playerId" placeholder="请输入已注册玩家ID" />
         </el-form-item>
         <el-form-item label="代理类型" prop="agentType">
           <el-radio-group v-model="createForm.agentType">
@@ -800,14 +810,6 @@
             controls-position="right"
           />
           <span class="inline-tip">{{ rateText(createForm.commissionRateBp) }}</span>
-        </el-form-item>
-        <el-form-item label="后台用户ID" prop="sysUserId">
-          <el-input-number
-            v-model="createForm.sysUserId"
-            :min="1"
-            :controls="false"
-            controls-position="right"
-          />
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
@@ -923,6 +925,7 @@
         <el-descriptions-item label="房号">{{ replayPlayback.number }}</el-descriptions-item>
         <el-descriptions-item label="局号">{{ replayPlayback.roundNo }}</el-descriptions-item>
         <el-descriptions-item label="时间">{{ replayPlayback.time }}</el-descriptions-item>
+        <el-descriptions-item label="追溯窗口" :span="2">{{ replayTraceText(replayPlayback) }}</el-descriptions-item>
         <el-descriptions-item label="玩家" :span="2">{{ replayPlayersText(replayPlayback.players) }}</el-descriptions-item>
         <el-descriptions-item label="分数" :span="2">{{ replayArrayText(replayPlayback.scores) }}</el-descriptions-item>
         <el-descriptions-item label="输赢积分" :span="2">{{ replayArrayText(replayPlayback.winGolds) }}</el-descriptions-item>
@@ -945,12 +948,10 @@
 <script>
 import {
   adjustAgencyWallet,
-  bindPlayerByInviteCode,
   createAgency,
   executeAgencyUnbind,
   getAgencyCommissionSummary,
   getAgencyOverview,
-  getAgencyPlayerStats,
   getAgencyReplayPlayback,
   getAgencyTree,
   getAgencyWalletBalance,
@@ -958,10 +959,10 @@ import {
   listAgencyBinding,
   listAgencyCommission,
   listAgencyReplay,
+  listAgencyStat,
   listAgencyUnbindRequest,
   listAgencyWalletLedger,
   requestAgencyUnbind,
-  resetAgencyInviteCode,
   updateAgencyRate,
   updateAgencyStatus
 } from '@/api/niuma/agency'
@@ -994,10 +995,6 @@ export default {
         status: null,
         pageNum: 1,
         pageSize: 10
-      },
-      bindForm: {
-        playerId: null,
-        inviteCode: null
       },
       commissionLoading: false,
       commissionList: [],
@@ -1036,10 +1033,17 @@ export default {
         playerId: null,
         reason: null
       },
-      statsQuery: {
-        playerId: null
+      agencyStatTab: 'group',
+      agencyStatLoading: false,
+      agencyStatList: [],
+      agencyStatTotal: 0,
+      agencyStatParentId: null,
+      agencyStatParentName: null,
+      agencyStatQuery: {
+        keyword: null,
+        pageNum: 1,
+        pageSize: 10
       },
-      playerStats: {},
       replayLoading: false,
       replayList: [],
       replayTotal: 0,
@@ -1062,8 +1066,7 @@ export default {
         playerId: null,
         agentType: 2,
         superiorPlayerId: null,
-        commissionRateBp: 0,
-        sysUserId: undefined
+        commissionRateBp: 0
       },
       rateDialogVisible: false,
       rateForm: {
@@ -1098,10 +1101,6 @@ export default {
         amount: [{ required: true, message: '数量不能为空', trigger: 'blur' }],
         reason: [{ required: true, message: '原因不能为空', trigger: 'blur' }]
       },
-      bindRules: {
-        playerId: [{ required: true, message: '玩家ID不能为空', trigger: 'blur' }],
-        inviteCode: [{ required: true, message: '邀请码不能为空', trigger: 'blur' }]
-      },
       unbindRules: {
         playerId: [{ required: true, message: '玩家ID不能为空', trigger: 'blur' }],
         reason: [{ required: true, message: '原因不能为空', trigger: 'blur' }]
@@ -1127,6 +1126,8 @@ export default {
         this.loadWalletList()
       } else if (tab.name === 'unbind') {
         this.loadUnbindList()
+      } else if (tab.name === 'stats') {
+        this.loadAgencyStats()
       } else if (tab.name === 'replay') {
         this.loadReplayList()
       }
@@ -1166,8 +1167,7 @@ export default {
         playerId: null,
         agentType: 2,
         superiorPlayerId: null,
-        commissionRateBp: 0,
-        sysUserId: undefined
+        commissionRateBp: 0
       }
       this.createDialogVisible = true
       this.$nextTick(() => {
@@ -1181,7 +1181,7 @@ export default {
         }
         createAgency(this.createForm).then(response => {
           this.createDialogVisible = false
-          this.$modal.msgSuccess('新增代理成功，邀请码：' + (response.inviteCode || ''))
+          this.$modal.msgSuccess('新增代理成功，工作台账号：' + (response.workbenchAccount || ''))
           this.afterConfigChanged()
         })
       })
@@ -1214,45 +1214,19 @@ export default {
       })
     },
     handleStatus(row) {
-      const status = row.status === 0 ? 1 : 0
-      const text = status === 0 ? '启用' : '停用'
-      this.$confirm('确认' + text + '代理 ' + row.playerId + '？', '系统提示', {
+      const status = row.workbenchStatus === 0 ? 1 : 0
+      const text = status === 0 ? '恢复工作台' : '撤销工作台'
+      this.$confirm('确认' + text + '账号 ' + row.playerId + '？', '系统提示', {
         type: 'warning'
       }).then(() => {
         return updateAgencyStatus(row.playerId, {
           status: status,
-          reason: text + '代理'
+          reason: text
         })
       }).then(() => {
         this.$modal.msgSuccess(text + '成功')
         this.afterConfigChanged()
       }).catch(() => {})
-    },
-    handleResetInvite(row) {
-      this.$confirm('确认重置代理 ' + row.playerId + ' 的邀请码？', '系统提示', {
-        type: 'warning'
-      }).then(() => {
-        return resetAgencyInviteCode(row.playerId)
-      }).then(response => {
-        this.$modal.msgSuccess('新邀请码：' + (response.inviteCode || ''))
-        this.afterConfigChanged()
-      }).catch(() => {})
-    },
-    submitBind() {
-      this.$refs.bindForm.validate(valid => {
-        if (!valid) {
-          return
-        }
-        bindPlayerByInviteCode(this.bindForm).then(() => {
-          this.$modal.msgSuccess('绑定成功')
-          this.bindForm = {
-            playerId: null,
-            inviteCode: null
-          }
-          this.loadBindingList()
-          this.afterConfigChanged()
-        })
-      })
     },
     loadBindingList() {
       this.bindingLoading = true
@@ -1446,14 +1420,49 @@ export default {
         this.afterConfigChanged()
       }).catch(() => {})
     },
-    loadPlayerStats() {
-      if (!this.statsQuery.playerId) {
-        this.$modal.msgError('请输入玩家ID')
-        return
-      }
-      getAgencyPlayerStats(this.statsQuery.playerId).then(response => {
-        this.playerStats = response || {}
+    loadAgencyStats() {
+      this.agencyStatLoading = true
+      const query = Object.assign({}, this.agencyStatQuery, {
+        statType: this.agencyStatTab,
+        parentPlayerId: this.agencyStatParentId || null
       })
+      listAgencyStat(query).then(response => {
+        this.agencyStatList = response.records || []
+        this.agencyStatTotal = response.total || 0
+      }).finally(() => {
+        this.agencyStatLoading = false
+      })
+    },
+    handleAgencyStatTabClick() {
+      this.agencyStatQuery.pageNum = 1
+      this.loadAgencyStats()
+    },
+    handleAgencyStatQuery() {
+      this.agencyStatQuery.pageNum = 1
+      this.loadAgencyStats()
+    },
+    resetAgencyStatQuery() {
+      this.agencyStatQuery.keyword = null
+      this.handleAgencyStatQuery()
+    },
+    viewAgencyStatChildren(row) {
+      this.agencyStatParentId = row.playerId
+      this.agencyStatParentName = row.nickname || row.account || row.playerId
+      this.agencyStatTab = 'member'
+      this.agencyStatQuery.pageNum = 1
+      this.loadAgencyStats()
+    },
+    resetAgencyStatParent() {
+      this.agencyStatParentId = null
+      this.agencyStatParentName = null
+      this.agencyStatTab = 'group'
+      this.agencyStatQuery.pageNum = 1
+      this.loadAgencyStats()
+    },
+    agencyStatParentText() {
+      return this.agencyStatParentId
+        ? (this.agencyStatParentName || this.agencyStatParentId) + ' 的直邀'
+        : '当前账号直邀'
     },
     loadReplayList() {
       this.replayLoading = true
@@ -1503,6 +1512,10 @@ export default {
       const amount = Number(value || 0)
       return amount.toLocaleString()
     },
+    avatarInitial(row) {
+      const name = row.nickname || row.account || row.playerId || '-'
+      return name.substring(0, 1)
+    },
     rateText(value) {
       const rate = Number(value || 0) / 100
       return rate.toFixed(2) + '%'
@@ -1516,8 +1529,8 @@ export default {
       }
       return '二级'
     },
-    statusText(value) {
-      return value === 0 ? '正常' : '停用'
+    workbenchStatusText(value) {
+      return value === 0 ? '可登录' : '已撤销'
     },
     bindStatusText(value) {
       if (value === 'active') {
@@ -1570,6 +1583,15 @@ export default {
         return '-'
       }
       return values.map(item => Number(item || 0).toLocaleString()).join(' / ')
+    },
+    replayTraceText(row) {
+      if (!row) {
+        return '-'
+      }
+      if (row.traceStartTime) {
+        return row.traceStartTime + ' 至 ' + (row.traceEndTime || '当前')
+      }
+      return row.expireTime ? '过期 ' + row.expireTime : '-'
     }
   }
 }
@@ -1646,5 +1668,36 @@ export default {
   margin-right: 10px;
   color: #303133;
   font-weight: 600;
+}
+
+.player-info-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.player-avatar {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #f2f3f5;
+}
+
+.avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: #67c23a;
+  font-weight: 600;
+}
+
+.player-name {
+  display: block;
+  color: #303133;
+  line-height: 20px;
 }
 </style>

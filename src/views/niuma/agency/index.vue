@@ -623,6 +623,16 @@
               @keyup.enter.native="handleAgencyStatQuery"
             />
           </el-form-item>
+          <el-form-item label="统计时间">
+            <el-date-picker
+              v-model="agencyStatRange"
+              type="datetimerange"
+              value-format="yyyy-MM-dd HH:mm:ss"
+              range-separator="至"
+              start-placeholder="开始时间"
+              end-placeholder="结束时间"
+            />
+          </el-form-item>
           <el-form-item>
             <el-button type="primary" icon="el-icon-search" size="mini" @click="handleAgencyStatQuery">查询</el-button>
             <el-button icon="el-icon-refresh" size="mini" @click="resetAgencyStatQuery">重置</el-button>
@@ -639,13 +649,17 @@
         </el-form>
 
         <el-tabs v-model="agencyStatTab" @tab-click="handleAgencyStatTabClick">
-          <el-tab-pane label="群统计" name="group" />
-          <el-tab-pane label="成员统计" name="member" />
+          <el-tab-pane label="直邀玩家" name="member" />
+          <el-tab-pane label="合伙人列表" name="group" />
         </el-tabs>
 
-        <el-table v-loading="agencyStatLoading" :data="agencyStatList">
-          <el-table-column label="身份" align="center" prop="identity" width="110" />
-          <el-table-column label="信息" min-width="220">
+        <el-table
+          v-loading="agencyStatLoading"
+          :data="agencyStatList"
+          show-summary
+          :summary-method="agencyStatSummaryMethod"
+        >
+          <el-table-column label="个人信息" prop="playerId" min-width="260">
             <template slot-scope="scope">
               <div class="player-info-cell">
                 <img v-if="scope.row.avatar" :src="scope.row.avatar" class="player-avatar">
@@ -657,19 +671,14 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="积分" align="center" width="130">
+          <el-table-column label="输赢比赛分" prop="scoreDelta" align="center" width="160">
             <template slot-scope="scope">
-              <span>{{ amountText(scope.row.score) }}</span>
+              <span>{{ agencyStatScoreText(scope.row) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="总消耗" align="center" width="130">
+          <el-table-column label="场次" prop="roundCount" align="center" width="130">
             <template slot-scope="scope">
-              <span>{{ amountText(scope.row.totalConsume) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="获得赠送" align="center" width="130">
-            <template slot-scope="scope">
-              <span>{{ amountText(scope.row.giftReceived) }}</span>
+              <span>{{ amountText(scope.row.roundCount) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="操作" align="center" width="130">
@@ -680,7 +689,7 @@
                 size="mini"
                 icon="el-icon-view"
                 @click="viewAgencyStatChildren(scope.row)"
-              >查看下级</el-button>
+              >查看玩家</el-button>
               <span v-else class="muted">-</span>
             </template>
           </el-table-column>
@@ -1033,10 +1042,15 @@ export default {
         playerId: null,
         reason: null
       },
-      agencyStatTab: 'group',
+      agencyStatTab: 'member',
       agencyStatLoading: false,
       agencyStatList: [],
       agencyStatTotal: 0,
+      agencyStatRange: [],
+      agencyStatSummary: {
+        totalScoreDelta: 0,
+        totalRounds: 0
+      },
       agencyStatParentId: null,
       agencyStatParentName: null,
       agencyStatQuery: {
@@ -1422,18 +1436,32 @@ export default {
     },
     loadAgencyStats() {
       this.agencyStatLoading = true
-      const query = Object.assign({}, this.agencyStatQuery, {
+      this.agencyStatSummary = {
+        totalScoreDelta: 0,
+        totalRounds: 0
+      }
+      const query = this.buildTimeQuery(this.agencyStatQuery, this.agencyStatRange)
+      Object.assign(query, {
         statType: this.agencyStatTab,
         parentPlayerId: this.agencyStatParentId || null
       })
       listAgencyStat(query).then(response => {
-        this.agencyStatList = response.records || []
-        this.agencyStatTotal = response.total || 0
+        const data = response || {}
+        this.agencyStatList = data.records || []
+        this.agencyStatTotal = data.total || 0
+        this.agencyStatSummary = {
+          totalScoreDelta: data.totalScoreDelta || 0,
+          totalRounds: data.totalRounds || 0
+        }
       }).finally(() => {
         this.agencyStatLoading = false
       })
     },
-    handleAgencyStatTabClick() {
+    handleAgencyStatTabClick(tab) {
+      if (tab && tab.name === 'group') {
+        this.agencyStatParentId = null
+        this.agencyStatParentName = null
+      }
       this.agencyStatQuery.pageNum = 1
       this.loadAgencyStats()
     },
@@ -1443,6 +1471,7 @@ export default {
     },
     resetAgencyStatQuery() {
       this.agencyStatQuery.keyword = null
+      this.agencyStatRange = []
       this.handleAgencyStatQuery()
     },
     viewAgencyStatChildren(row) {
@@ -1460,9 +1489,28 @@ export default {
       this.loadAgencyStats()
     },
     agencyStatParentText() {
-      return this.agencyStatParentId
-        ? (this.agencyStatParentName || this.agencyStatParentId) + ' 的直邀'
-        : '当前账号直邀'
+      if (this.agencyStatParentId) {
+        return (this.agencyStatParentName || this.agencyStatParentId) + ' 的线下玩家'
+      }
+      return this.agencyStatTab === 'group' ? '当前账号直邀合伙人' : '当前账号直邀玩家'
+    },
+    agencyStatScoreText(row) {
+      const score = row.scoreDelta != null ? row.scoreDelta : row.score
+      return this.amountText(score)
+    },
+    agencyStatSummaryMethod({ columns }) {
+      return columns.map((column, index) => {
+        if (index === 0) {
+          return '总计'
+        }
+        if (column.property === 'scoreDelta') {
+          return this.amountText(this.agencyStatSummary.totalScoreDelta)
+        }
+        if (column.property === 'roundCount') {
+          return this.amountText(this.agencyStatSummary.totalRounds)
+        }
+        return ''
+      })
     },
     loadReplayList() {
       this.replayLoading = true

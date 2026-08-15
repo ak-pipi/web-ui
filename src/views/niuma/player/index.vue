@@ -132,7 +132,7 @@
           <el-descriptions-item label="状态">{{ playerStatusText(playerDetail.status) }}</el-descriptions-item>
           <el-descriptions-item label="当前积分">{{ amountText(playerDetail.goldBalance) }}</el-descriptions-item>
           <el-descriptions-item label="保险箱">{{ amountText(playerDetail.depositBalance) }}</el-descriptions-item>
-          <el-descriptions-item label="总局数">{{ amountText(playerDetail.totalRounds) }}</el-descriptions-item>
+          <el-descriptions-item label="总场次">{{ amountText(playerDetail.totalRounds) }}</el-descriptions-item>
           <el-descriptions-item label="胜率">{{ percentText(playerDetail.winRate) }}</el-descriptions-item>
           <el-descriptions-item label="净输赢">{{ signedAmountText(playerDetail.totalScoreDelta) }}</el-descriptions-item>
         </el-descriptions>
@@ -140,10 +140,10 @@
         <el-divider content-position="left">玩法汇总</el-divider>
         <el-table :data="gameSummaryList" size="small">
           <el-table-column label="玩法" align="center" prop="gameName" min-width="110" />
-          <el-table-column label="总局数" align="right" prop="totalRounds" min-width="90" />
-          <el-table-column label="胜局" align="right" prop="winCount" min-width="80" />
-          <el-table-column label="负局" align="right" prop="loseCount" min-width="80" />
-          <el-table-column label="今日局数" align="right" prop="todayRounds" min-width="90" />
+          <el-table-column label="总场次" align="right" prop="totalRounds" min-width="90" />
+          <el-table-column label="胜场" align="right" prop="winCount" min-width="80" />
+          <el-table-column label="负场" align="right" prop="loseCount" min-width="80" />
+          <el-table-column label="今日场次" align="right" prop="todayRounds" min-width="90" />
           <el-table-column label="胜率" align="right" min-width="90">
             <template slot-scope="scope">
               <span>{{ percentText(scope.row.winRate) }}</span>
